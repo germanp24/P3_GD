@@ -43,6 +43,8 @@ while total_commits < max_commits:
     if not commits_dict:
         break
     for commit in commits_dict:
+        commit_date_str = commit['commit']['commiter']['date'] # Fecha del commit en string
+        
         commit['projectId'] = project
         # print(str(commit))
         collCommits.insert_one(commit)
