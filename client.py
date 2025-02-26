@@ -3,6 +3,7 @@ import pymongo
 from pymongo import MongoClient
 from dotenv import load_dotenv
 import os
+from datetime import datetime
 
 # Cargar las variables de entorno desde el archivo .env
 load_dotenv()
@@ -31,6 +32,9 @@ per_page = 100
 page = 1
 total_commits = 0
 max_commits = 1000
+
+# Definir la fecha mínima (1 de enero de 2018)
+start_data = datetime(2018, 1, 1)
 
 while total_commits < max_commits:
     url = repos_url.format(user, project, page, per_page)
