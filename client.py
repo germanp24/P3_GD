@@ -44,6 +44,7 @@ while total_commits < max_commits:
         break
     for commit in commits_dict:
         commit_date_str = commit['commit']['commiter']['date'] # Fecha del commit en string
+        commit_date = datetime.strptime(commit_date-str, '%Y-%m-%dT%H:%M:%SZ') # Convertir a objeto datetime
         
         commit['projectId'] = project
         # print(str(commit))
