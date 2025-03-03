@@ -76,6 +76,7 @@ while True:
         )
 
         total_commits += 1
+        print(f"Found commit: {commit_sha} - {commit_date}")
         if total_commits >= max_commits:
             break
     page += 1
