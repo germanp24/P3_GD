@@ -44,8 +44,11 @@ while True:
     url = repos_url.format(user, project, page, per_page, since_date, until_date)
     print(f"Fetching page {page}: {url}")
     r = requests.get(url, headers=headers)
-    if not commits_dict:
-        break
+    
+    if r.status_code != 200:
+        print(f"Error: {r.status_code}, {r.text}")
+        break # Salir si hay error
+    
     for commit in commits_dict:
         commit['projectId'] = project
         # print(str(commit))
