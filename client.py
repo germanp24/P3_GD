@@ -39,10 +39,11 @@ total_commits = 0
 since_date = datetime(2018, 1, 1).isoformat() + 'Z'
 until_date = datetime.now().isoformat() + 'Z' # Fecha actual
 
-while total_commits < max_commits:
-    url = repos_url.format(user, project, page, per_page)
+
+while True:
+    url = repos_url.format(user, project, page, per_page, since_date, until_date)
+    print(f"Fetching page {page}: {url}")
     r = requests.get(url, headers=headers)
-    commits_dict = r.json()
     if not commits_dict:
         break
     for commit in commits_dict:
