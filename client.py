@@ -61,6 +61,10 @@ while True:
         commit_date = commit['commit']['committer']['date']
         commit_datetime = datetime.strptime(commit_date, "%Y-%m-%dT%H:%M:%SZ")
 
+        # Si el commit es anterior a 2018-01-01, detenemos la ejecución
+        if commit_datetime < datetime(2018, 1, 1):
+            print(f"Reached commit befor 2018: {commit_sha} - {commit_date}")
+            
         # print(str(commit))
         collCommits.insert_one(commit)
         total_commits += 1
