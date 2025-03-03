@@ -77,6 +77,8 @@ while True:
 
         total_commits += 1
         print(f"Found commit: {commit_sha} - {commit_date}")
-        if total_commits >= max_commits:
-            break
-    page += 1
+        
+    else: 
+        page += 1 # Pasar a la siguiente página
+        continue # Continuar con la siguiente iteración
+    break # Si llegamos aquí, significa que encontramos un commit antes de 2018 y salimos del while
