@@ -82,3 +82,5 @@ while True:
         page += 1 # Pasar a la siguiente página
         continue # Continuar con la siguiente iteración
     break # Si llegamos aquí, significa que encontramos un commit antes de 2018 y salimos del while
+
+print(f"Total commits found: {total_commits}")
