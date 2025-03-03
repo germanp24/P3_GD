@@ -64,7 +64,11 @@ while True:
         # Si el commit es anterior a 2018-01-01, detenemos la ejecución
         if commit_datetime < datetime(2018, 1, 1):
             print(f"Reached commit befor 2018: {commit_sha} - {commit_date}")
-            
+            break
+        
+        commit['projectId'] = project
+        
+        
         # print(str(commit))
         collCommits.insert_one(commit)
         total_commits += 1
