@@ -51,6 +51,11 @@ while True:
     
     commits_dict = r.json()
     
+    # Si no hay más commits en la página, detenemos la ejecución
+    if not commits_dict:
+        print("No more commits found.")
+        break
+    
     for commit in commits_dict:
         commit['projectId'] = project
         # print(str(commit))
