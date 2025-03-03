@@ -49,6 +49,8 @@ while True:
         print(f"Error: {r.status_code}, {r.text}")
         break # Salir si hay error
     
+    commits_dict = r.json()
+    
     for commit in commits_dict:
         commit['projectId'] = project
         # print(str(commit))
