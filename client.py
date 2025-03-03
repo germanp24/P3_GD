@@ -16,6 +16,8 @@ headers = {
     'Authorization': f'token {token}',
     'Accept': 'application/vnd.github.v3+json'
 }
+
+# Configuración de mongoDB
 MONGODB_HOST = 'localhost'
 MONGODB_PORT = 27017
 DB_NAME = 'github'
@@ -26,15 +28,16 @@ collCommits = connection[DB_NAME][COLLECTION_COMMITS]
 repos_url = 'https://api.github.com/repos/{}/{}/commits?page={}&per_page={}'
 'https://github.com/sourcegraph/sourcegraph-public-snapshot/commits/'
 
+# Configuración del repositorio y fechas
 user = 'microsoft'
 project = 'vscode'
 per_page = 100
 page = 1
 total_commits = 0
-max_commits = 1000
 
-# Definir la fecha mínima (1 de enero de 2018)
-start_data = datetime(2018, 1, 1)
+# Rango de fechas
+since_date = datetime(2018, 1, 1).isoformat() + 'Z'
+until_date = datetime.now().isoformat() + 'Z' # Fecha actual
 
 while total_commits < max_commits:
     url = repos_url.format(user, project, page, per_page)
@@ -43,9 +46,6 @@ while total_commits < max_commits:
     if not commits_dict:
         break
     for commit in commits_dict:
-        commit_date_str = commit['commit']['commiter']['date'] # Fecha del commit en string
-        commit_date = datetime.strptime(commit_date-str, '%Y-%m-%dT%H:%M:%SZ') # Convertir a objeto datetime
-        
         commit['projectId'] = project
         # print(str(commit))
         collCommits.insert_one(commit)
