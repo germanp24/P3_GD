@@ -57,7 +57,10 @@ while True:
         break
     
     for commit in commits_dict:
-        commit['projectId'] = project
+        commit_sha = commit['sha']
+        commit_date = commit['commit']['committer']['date']
+        commit_datetime = datetime.strptime(commit_date, "%Y-%m-%dT%H:%M:%SZ")
+
         # print(str(commit))
         collCommits.insert_one(commit)
         total_commits += 1
