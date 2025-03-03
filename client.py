@@ -68,9 +68,13 @@ while True:
         
         commit['projectId'] = project
         
-        
-        # print(str(commit))
-        collCommits.insert_one(commit)
+        # Evitar insertar duplicados en mongoDB
+        collCommits.update_one(
+            {"sha": commit_sha},  # Buscar por SHA
+            {"$set": commit},  # Insertar o actualizar
+            upsert=True  # Evita insertar duplicados
+        )
+
         total_commits += 1
         if total_commits >= max_commits:
             break
