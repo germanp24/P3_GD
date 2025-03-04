@@ -36,12 +36,13 @@ page = 1
 total_commits = 0
 
 # Rango de fechas
-since_date = datetime(2018, 1, 1).isoformat() + 'Z'
-until_date = datetime.now().isoformat() + 'Z' # Fecha actual
+now_date = datetime.now().isoformat() + 'Z' # Fecha actual
+until_date = datetime(2018, 1, 1)
 
+stop_fetching = False
 
-while True:
-    url = repos_url.format(user, project, page, per_page, since_date, until_date)
+while not stop_fetching:
+    url = repos_url.format(user, project, page, per_page, now_date)
     print(f"Fetching page {page}: {url}")
     r = requests.get(url, headers=headers)
     
@@ -61,9 +62,9 @@ while True:
         commit_date = commit['commit']['committer']['date']
         commit_datetime = datetime.strptime(commit_date, "%Y-%m-%dT%H:%M:%SZ")
 
-        # Si el commit es anterior a 2018-01-01, detenemos la ejecución
-        if commit_datetime < datetime(2018, 1, 1):
-            print(f"Reached commit befor 2018: {commit_sha} - {commit_date}")
+        if commit_datetime < until_date:
+            print(f"Reached commit before the last one: {commit_sha} - {commit_date}")
+            stop_fetching = True
             break
         
         commit['projectId'] = project
@@ -78,9 +79,7 @@ while True:
         total_commits += 1
         print(f"Found commit: {commit_sha} - {commit_date}")
         
-    else: 
+    if not stop_fetching:
         page += 1 # Pasar a la siguiente página
-        continue # Continuar con la siguiente iteración
-    break # Si llegamos aquí, significa que encontramos un commit antes de 2018 y salimos del while
 
 print(f"Total commits found: {total_commits}")
