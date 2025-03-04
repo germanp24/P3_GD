@@ -19,14 +19,14 @@ def check_rate_limit(headers):
     reset_time = int(headers.get('X-RateLimit-Reset', 0))
 
     # Comprobar si el valor de reset_time es negativo
-    current_time = int(time.time())  # Tiempo actual en segundos desde la época Unix
+    current_time = int(time.time())  
     if remaining == 0:
         # Calcular cuánto tiempo queda hasta que se restablezca el rate limit
         reset_time = reset_time - current_time
         if reset_time < 0:
-            reset_time = 0  # Si el tiempo de espera es negativo, no dormir
+            reset_time = 0  
         print(f"Rate limit alcanzado. Esperando {reset_time} segundos...")
-        time.sleep(reset_time)  # Dormir el tiempo calculado
+        time.sleep(reset_time) 
     else:
         print(f"Rate limit restante: {remaining} solicitudes.")
 
