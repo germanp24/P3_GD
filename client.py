@@ -68,6 +68,7 @@ while not stop_fetching:
     
     commits_dict = r.json()
     
+
     if not commits_dict:
         print("No more commits found.")
         break
@@ -84,6 +85,8 @@ while not stop_fetching:
         
         commit['projectId'] = project
         
+        # Evitar insertar duplicados en mongoDB
+
         collCommits.update_one(
             {"sha": commit_sha},  # Buscar por SHA
             {"$set": commit},  # Insertar o actualizar
