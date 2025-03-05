@@ -16,6 +16,8 @@ headers = {
     'Authorization': f'token {token}',
     'Accept': 'application/vnd.github.v3+json'
 }
+
+# Configuración de mongoDB
 MONGODB_HOST = 'localhost'
 MONGODB_PORT = 27017
 DB_NAME = 'github'
@@ -26,27 +28,58 @@ collCommits = connection[DB_NAME][COLLECTION_COMMITS]
 repos_url = 'https://api.github.com/repos/{}/{}/commits?page={}&per_page={}'
 'https://github.com/sourcegraph/sourcegraph-public-snapshot/commits/'
 
+# Configuración del repositorio y fechas
 user = 'microsoft'
 project = 'vscode'
 per_page = 100
 page = 1
 total_commits = 0
-max_commits = 1000
 
-# Definir la fecha mínima (1 de enero de 2018)
-start_data = datetime(2018, 1, 1)
+# Rango de fechas
+now_date = datetime.now().isoformat() + 'Z' # Fecha actual
+until_date = datetime(2018, 1, 1)
 
-while total_commits < max_commits:
-    url = repos_url.format(user, project, page, per_page)
+stop_fetching = False
+
+while not stop_fetching:
+    url = repos_url.format(user, project, page, per_page, now_date)
+    print(f"Fetching page {page}: {url}")
     r = requests.get(url, headers=headers)
+    
+    if r.status_code != 200:
+        print(f"Error: {r.status_code}, {r.text}")
+        break # Salir si hay error
+    
     commits_dict = r.json()
+    
+    # Si no hay más commits en la página, detenemos la ejecución
     if not commits_dict:
+        print("No more commits found.")
         break
+    
     for commit in commits_dict:
-        commit['projectId'] = project
-        # print(str(commit))
-        collCommits.insert_one(commit)
-        total_commits += 1
-        if total_commits >= max_commits:
+        commit_sha = commit['sha']
+        commit_date = commit['commit']['committer']['date']
+        commit_datetime = datetime.strptime(commit_date, "%Y-%m-%dT%H:%M:%SZ")
+
+        if commit_datetime < until_date:
+            print(f"Reached commit before the last one: {commit_sha} - {commit_date}")
+            stop_fetching = True
             break
-    page += 1
+        
+        commit['projectId'] = project
+        
+        # Evitar insertar duplicados en mongoDB
+        collCommits.update_one(
+            {"sha": commit_sha},  # Buscar por SHA
+            {"$set": commit},  # Insertar o actualizar
+            upsert=True  # Evita insertar duplicados
+        )
+
+        total_commits += 1
+        print(f"Found commit: {commit_sha} - {commit_date}")
+        
+    if not stop_fetching:
+        page += 1 # Pasar a la siguiente página
+
+print(f"Total commits found: {total_commits}")
