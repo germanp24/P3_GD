@@ -13,29 +13,26 @@ token = os.getenv('GITHUB_TOKEN')
 if not token:
     raise ValueError("No GITHUB_TOKEN found in environment variables")
 
-# Función para verificar el rate limit
-def check_rate_limit(headers):
-    remaining = int(headers.get('X-RateLimit-Remaining', 0))
-    reset_time = int(headers.get('X-RateLimit-Reset', 0))
-
-    # Comprobar si el valor de reset_time es negativo
-    current_time = int(time.time())  
-    if remaining == 0:
-        # Calcular cuánto tiempo queda hasta que se restablezca el rate limit
-        reset_time = reset_time - current_time
-        if reset_time < 0:
-            reset_time = 0  
-        print(f"Rate limit alcanzado. Esperando {reset_time} segundos...")
-        time.sleep(reset_time) 
-    else:
-        print(f"Rate limit restante: {remaining} solicitudes.")
-
 headers = {
     'Authorization': f'token {token}',
     'Accept': 'application/vnd.github.v3+json'
 }
 
-# Conexión con MongoDB
+# Función para verificar el rate limit
+def check_rate_limit(response_headers):
+    remaining = int(response_headers.get('X-RateLimit-Remaining', 0))
+    reset_time = int(response_headers.get('X-RateLimit-Reset', 0))
+    
+    current_time = int(time.time())
+    if remaining == 0:
+        wait_time = reset_time - current_time
+        if wait_time > 0:
+            print(f"Rate limit alcanzado. Esperando {wait_time} segundos...")
+            time.sleep(wait_time)
+    else:
+        print(f"Rate limit restante: {remaining} solicitudes.")
+
+# Configuración de MongoDB
 MONGODB_HOST = 'localhost'
 MONGODB_PORT = 27017
 DB_NAME = 'github'
@@ -44,43 +41,59 @@ connection = MongoClient(MONGODB_HOST, MONGODB_PORT)
 collCommits = connection[DB_NAME][COLLECTION_COMMITS]
 
 repos_url = 'https://api.github.com/repos/{}/{}/commits?page={}&per_page={}'
-'https://github.com/sourcegraph/sourcegraph-public-snapshot/commits/'
 
+# Configuración del repositorio y fechas
 user = 'microsoft'
 project = 'vscode'
 per_page = 100
 page = 1
 total_commits = 0
-max_commits = 1000
 
-# Definir la fecha mínima (1 de enero de 2018)
-start_data = datetime(2018, 1, 1)
+# Rango de fechas
+now_date = datetime.now().isoformat() + 'Z'  # Fecha actual
+until_date = datetime(2018, 1, 1)
 
-# Verificar el rate limit antes de hacer solicitudes
-rate_limit_url = 'https://api.github.com/rate_limit'
-r = requests.get(rate_limit_url, headers=headers)
-if r.status_code == 200:
-    rate_limit_data = r.json()
-    check_rate_limit(rate_limit_data['resources']['core'])
-else:
-    print(f"Error al comprobar el rate limit: {r.status_code}")
-    exit(1)
+stop_fetching = False
 
-# Ciclo para obtener los commits
-while total_commits < max_commits:
-    url = repos_url.format(user, project, page, per_page)
-    r = requests.get(url, headers=headers)
+while not stop_fetching:
+    url = repos_url.format(user, project, page, per_page, now_date)
+    print(f"Fetching page {page}: {url}")
     
-    # Verificar rate limit después de cada solicitud
-    check_rate_limit(r.headers)
+    r = requests.get(url, headers=headers)
+    check_rate_limit(r.headers)  # Verificar el rate limit después de cada solicitud
+    
+    if r.status_code != 200:
+        print(f"Error: {r.status_code}, {r.text}")
+        break  # Salir si hay error
     
     commits_dict = r.json()
+    
     if not commits_dict:
+        print("No more commits found.")
         break
+    
     for commit in commits_dict:
-        commit['projectId'] = project
-        collCommits.insert_one(commit)
-        total_commits += 1
-        if total_commits >= max_commits:
+        commit_sha = commit['sha']
+        commit_date = commit['commit']['committer']['date']
+        commit_datetime = datetime.strptime(commit_date, "%Y-%m-%dT%H:%M:%SZ")
+
+        if commit_datetime < until_date:
+            print(f"Reached commit before the last one: {commit_sha} - {commit_date}")
+            stop_fetching = True
             break
-    page += 1
+        
+        commit['projectId'] = project
+        
+        collCommits.update_one(
+            {"sha": commit_sha},  # Buscar por SHA
+            {"$set": commit},  # Insertar o actualizar
+            upsert=True  # Evita insertar duplicados
+        )
+
+        total_commits += 1
+        print(f"Found commit: {commit_sha} - {commit_date}")
+        
+    if not stop_fetching:
+        page += 1  # Pasar a la siguiente página
+
+print(f"Total commits found: {total_commits}")
