@@ -18,20 +18,6 @@ headers = {
     'Accept': 'application/vnd.github.v3+json'
 }
 
-# Función para verificar el rate limit
-def check_rate_limit(response_headers):
-    remaining = int(response_headers.get('X-RateLimit-Remaining', 0))
-    reset_time = int(response_headers.get('X-RateLimit-Reset', 0))
-    
-    current_time = int(time.time())
-    if remaining == 0:
-        wait_time = reset_time - current_time
-        if wait_time > 0:
-            print(f"Rate limit alcanzado. Esperando {wait_time} segundos...")
-            time.sleep(wait_time)
-    else:
-        print(f"Rate limit restante: {remaining} solicitudes.")
-
 # Configuración de MongoDB
 MONGODB_HOST = 'localhost'
 MONGODB_PORT = 27017
@@ -43,37 +29,68 @@ collCommits = connection[DB_NAME][COLLECTION_COMMITS]
 repos_url = 'https://api.github.com/repos/{}/{}/commits?page={}&per_page={}'
 commit_url = 'https://api.github.com/repos/{}/{}/commits/{}'
 
-
 # Configuración del repositorio y fechas
 user = 'microsoft'
 project = 'vscode'
 per_page = 100
 page = 1
 total_commits = 0
+request_count = 0  # Contador de peticiones
 
-# Rango de fechas
+# Fecha límite (evitar commits muy antiguos)
 now_date = datetime.now().isoformat() + 'Z'  # Fecha actual
 until_date = datetime(2018, 1, 1)
 
+
+def get_rate_limit():
+    """Obtiene el estado actual del rate limit desde la API de GitHub."""
+    r = requests.get("https://api.github.com/rate_limit", headers=headers)
+    rate_data = r.json()
+    remaining = rate_data['rate']['remaining']
+    reset_time = rate_data['rate']['reset']
+    reset_datetime = datetime.fromtimestamp(reset_time).strftime('%Y-%m-%d %H:%M:%S')
+    return remaining, reset_time, reset_datetime
+
+
+def check_rate_limit():
+    """Verifica el rate limit y espera si es necesario."""
+    global request_count
+    remaining, reset_time, reset_datetime = get_rate_limit()
+    time_until_reset = reset_time - int(time.time())
+    
+    print(f"Rate limit restante: {remaining} solicitudes. Reset en: {reset_datetime} ({time_until_reset} segundos)")
+    
+    if remaining <= 10:  # Si quedan pocas solicitudes, esperar
+        wait_time = time_until_reset + 5  # 5s de margen
+        print(f"Rate limit alcanzado. Esperando {wait_time} segundos...")
+        time.sleep(wait_time)
+        request_count = 0  # Reiniciar el contador
+
+
+# Bucle principal para obtener commits
 stop_fetching = False
 
 while not stop_fetching:
+    check_rate_limit()  # Verificar rate limit antes de cada petición
+
     url = repos_url.format(user, project, page, per_page, now_date)
     print(f"Fetching page {page}: {url}")
-    
+
     r = requests.get(url, headers=headers)
-    check_rate_limit(r.headers)  # Verificar el rate limit después de cada solicitud
-    
+    request_count += 1
+
     if r.status_code != 200:
         print(f"Error: {r.status_code}, {r.text}")
-        break  # Salir si hay error
-    
-    commits_dict = r.json()
+        break
 
+    commits_dict = r.json()
     if not commits_dict:
         print("No more commits found.")
         break
-    
+
+    bulk_operations = []  # Para operaciones en bloque de MongoDB
+    processed_commits = 0
+
     for commit in commits_dict:
         commit_sha = commit['sha']
         commit_date = commit['commit']['committer']['date']
@@ -83,21 +100,23 @@ while not stop_fetching:
             print(f"Reached commit before the last one: {commit_sha} - {commit_date}")
             stop_fetching = True
             break
-        
-        # Verificar si ya existe en MongoDB con los campos extendidos
+
+        # Verificar si el commit ya está almacenado con detalles
         existing_commit = collCommits.find_one(
-            {"sha": commit_sha}, {"modified_files": 1, "change_stats": 1}
+            {"sha": commit_sha}, {"_id": 1, "modified_files": 1, "change_stats": 1}
         )
-        
+
         if existing_commit and "modified_files" in existing_commit and "change_stats" in existing_commit:
             print(f"Skipping already stored commit: {commit_sha}")
-            continue
+            continue  # Evitar descargar detalles otra vez
 
-        # Obtener detalles extendidos de cada commit
+        # Obtener detalles extendidos
+        check_rate_limit()
         detailed_url = commit_url.format(user, project, commit_sha)
         detailed_response = requests.get(detailed_url, headers=headers)
+        request_count += 1
         detailed_commit = detailed_response.json()
-        
+
         # Extraer archivos modificados y estadísticas de cambios
         modified_files = [file['filename'] for file in detailed_commit.get('files', [])]
         change_stats = {
@@ -110,18 +129,25 @@ while not stop_fetching:
         commit['projectId'] = project
         commit['modified_files'] = modified_files
         commit['change_stats'] = change_stats
-        
-        # Evitar insertar duplicados en MongoDB
-        collCommits.update_one(
-            {"sha": commit_sha},  # Buscar por SHA
-            {"$set": commit},  # Insertar o actualizar
-            upsert=True  # Evita insertar duplicados
-        )
 
-        total_commits += 1
-        print(f"Found commit: {commit_sha} - {commit_date}")
-        
+        # Agregar operación en lote para mejorar rendimiento
+        bulk_operations.append(
+            pymongo.UpdateOne(
+                {"sha": commit_sha},  # Buscar por SHA
+                {"$set": commit},  # Insertar o actualizar
+                upsert=True  # Evita insertar duplicados
+            )
+        )
+        processed_commits += 1
+
+    # Ejecutar operaciones en lote para acelerar la escritura en MongoDB
+    if bulk_operations:
+        collCommits.bulk_write(bulk_operations)
+
+    total_commits += processed_commits
+    print(f"Processed {processed_commits} commits on page {page}. Total processed: {total_commits}")
+
     if not stop_fetching:
         page += 1  # Pasar a la siguiente página
 
-print(f"Total commits found: {total_commits}")
+print(f"Total commits stored: {total_commits}")
