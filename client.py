@@ -43,6 +43,7 @@ collCommits = connection[DB_NAME][COLLECTION_COMMITS]
 repos_url = 'https://api.github.com/repos/{}/{}/commits?page={}&per_page={}'
 commit_url = 'https://api.github.com/repos/{}/{}/commits/{}'
 
+
 # Configuración del repositorio y fechas
 user = 'microsoft'
 project = 'vscode'
@@ -68,7 +69,7 @@ while not stop_fetching:
         break  # Salir si hay error
     
     commits_dict = r.json()
-    
+
     if not commits_dict:
         print("No more commits found.")
         break
