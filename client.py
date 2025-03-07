@@ -83,9 +83,12 @@ while not stop_fetching:
             stop_fetching = True
             break
         
-        # Verificar si ya existe en MongoDB para evitar peticiones innecesarias
-        existing_commit = collCommits.find_one({"sha": commit_sha}, {"modified_files": 1})
-        if existing_commit and "modified_files" in existing_commit:
+        # Verificar si ya existe en MongoDB con los campos extendidos
+        existing_commit = collCommits.find_one(
+            {"sha": commit_sha}, {"modified_files": 1, "change_stats": 1}
+        )
+        
+        if existing_commit and "modified_files" in existing_commit and "change_stats" in existing_commit:
             print(f"Skipping already stored commit: {commit_sha}")
             continue
 
