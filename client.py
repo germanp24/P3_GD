@@ -41,6 +41,8 @@ connection = MongoClient(MONGODB_HOST, MONGODB_PORT)
 collCommits = connection[DB_NAME][COLLECTION_COMMITS]
 
 repos_url = 'https://api.github.com/repos/{}/{}/commits?page={}&per_page={}'
+commit_url = 'https://api.github.com/repos/{}/{}/commits/{}'
+
 
 # Configuración del repositorio y fechas
 user = 'microsoft'
@@ -67,7 +69,6 @@ while not stop_fetching:
         break  # Salir si hay error
     
     commits_dict = r.json()
-    
 
     if not commits_dict:
         print("No more commits found.")
@@ -83,10 +84,34 @@ while not stop_fetching:
             stop_fetching = True
             break
         
-        commit['projectId'] = project
+        # Verificar si ya existe en MongoDB con los campos extendidos
+        existing_commit = collCommits.find_one(
+            {"sha": commit_sha}, {"modified_files": 1, "change_stats": 1}
+        )
         
-        # Evitar insertar duplicados en mongoDB
+        if existing_commit and "modified_files" in existing_commit and "change_stats" in existing_commit:
+            print(f"Skipping already stored commit: {commit_sha}")
+            continue
 
+        # Obtener detalles extendidos de cada commit
+        detailed_url = commit_url.format(user, project, commit_sha)
+        detailed_response = requests.get(detailed_url, headers=headers)
+        detailed_commit = detailed_response.json()
+        
+        # Extraer archivos modificados y estadísticas de cambios
+        modified_files = [file['filename'] for file in detailed_commit.get('files', [])]
+        change_stats = {
+            'additions': sum(file.get('additions', 0) for file in detailed_commit.get('files', [])),
+            'deletions': sum(file.get('deletions', 0) for file in detailed_commit.get('files', [])),
+            'total': sum(file.get('changes', 0) for file in detailed_commit.get('files', []))
+        }
+
+        # Añadir campos extendidos
+        commit['projectId'] = project
+        commit['modified_files'] = modified_files
+        commit['change_stats'] = change_stats
+        
+        # Evitar insertar duplicados en MongoDB
         collCommits.update_one(
             {"sha": commit_sha},  # Buscar por SHA
             {"$set": commit},  # Insertar o actualizar
