@@ -41,16 +41,30 @@ request_count = 0  # Contador de peticiones
 now_date = datetime.now().isoformat() + 'Z'  # Fecha actual
 until_date = datetime(2018, 1, 1)
 
+def request_with_retry(url, headers, retries=3, timeout=30):
+    for attempt in range(retries):
+        try:
+            response = requests.get(url, headers=headers, timeout=timeout)
+            response.raise_for_status()  # Esto levantará una excepción si la respuesta es un error HTTP
+            return response
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+            print(f"Error de conexión (intento {attempt + 1}): {e}")
+            if attempt < retries - 1:
+                time.sleep(5)  # Esperar 5 segundos antes de reintentar
+            else:
+                raise  # Si no hay más reintentos, lanzar la excepción
+        except requests.exceptions.RequestException as e:
+            print(f"Error de solicitud: {e}")
+            raise  # Levanta cualquier otro error
 
 def get_rate_limit():
     """Obtiene el estado actual del rate limit desde la API de GitHub."""
-    r = requests.get("https://api.github.com/rate_limit", headers=headers)
+    r = request_with_retry("https://api.github.com/rate_limit", headers)
     rate_data = r.json()
     remaining = rate_data['rate']['remaining']
     reset_time = rate_data['rate']['reset']
     reset_datetime = datetime.fromtimestamp(reset_time).strftime('%Y-%m-%d %H:%M:%S')
     return remaining, reset_time, reset_datetime
-
 
 def check_rate_limit():
     """Verifica el rate limit y espera si es necesario."""
@@ -66,7 +80,6 @@ def check_rate_limit():
         time.sleep(wait_time)
         request_count = 0  # Reiniciar el contador
 
-
 # Bucle principal para obtener commits
 stop_fetching = False
 
@@ -76,7 +89,7 @@ while not stop_fetching:
     url = repos_url.format(user, project, page, per_page, now_date)
     print(f"Fetching page {page}: {url}")
 
-    r = requests.get(url, headers=headers)
+    r = request_with_retry(url, headers)
     request_count += 1
 
     if r.status_code != 200:
@@ -113,9 +126,9 @@ while not stop_fetching:
         # Obtener detalles extendidos
         check_rate_limit()
         detailed_url = commit_url.format(user, project, commit_sha)
-        detailed_response = requests.get(detailed_url, headers=headers)
+        detailed_commit_response = request_with_retry(detailed_url, headers)
         request_count += 1
-        detailed_commit = detailed_response.json()
+        detailed_commit = detailed_commit_response.json()
 
         # Extraer archivos modificados y estadísticas de cambios
         modified_files = [file['filename'] for file in detailed_commit.get('files', [])]
