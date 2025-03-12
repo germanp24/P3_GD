@@ -41,18 +41,17 @@ request_count = 0  # Contador de peticiones
 now_date = datetime.now().isoformat() + 'Z'  # Fecha actual
 until_date = datetime(2018, 1, 1)
 
-def request_with_retry(url, headers, retries=3, timeout=30):
-    for attempt in range(retries):
+def request_with_retry(url, headers, timeout=30):
+    attempt = 0
+    while True:
         try:
             response = requests.get(url, headers=headers, timeout=timeout)
             response.raise_for_status()  # Esto levantará una excepción si la respuesta es un error HTTP
             return response
         except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
-            print(f"Error de conexión (intento {attempt + 1}): {e}")
-            if attempt < retries - 1:
-                time.sleep(5)  # Esperar 5 segundos antes de reintentar
-            else:
-                raise  # Si no hay más reintentos, lanzar la excepción
+            attempt += 1
+            print(f"Error de conexión (intento {attempt}): {e}")
+            time.sleep(5)  # Esperar 5 segundos antes de reintentar
         except requests.exceptions.RequestException as e:
             print(f"Error de solicitud: {e}")
             raise  # Levanta cualquier otro error
