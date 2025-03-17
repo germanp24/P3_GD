@@ -34,10 +34,9 @@ Para utilizar este proyecto correctamente, sigue los siguientes pasos:
 
 ### 2. Instalación de Dependencias
 
-1. Abre una terminal y navega hasta el directorio del proyecto.
-2. Ejecuta el siguiente comando para instalar las dependencias necesarias:
+1. Ejecuta el siguiente comando para instalar las dependencias necesarias:
    ```sh
-   pip install -r requirements.txt
+   pip install python-dotenv
    ```
 
 ### 3. Instalación y Configuración de MongoDB
